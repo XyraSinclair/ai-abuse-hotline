@@ -1,7 +1,9 @@
-import { Hono } from 'hono';
-import crypto from 'crypto';
-import { config } from '../config.js';
-import type { HumanReportRequest, WebReportType } from '../types.js';
+import { Hono } from "hono";
+import { config } from "../config";
+import { getDb, getResponseTemplate } from "../db";
+import { classifyReport } from "../classifier";
+import { notifyNewReport } from "../notifications";
+import type { WebReportType } from "../types";
 
 const web = new Hono();
 
@@ -9,20 +11,23 @@ const web = new Hono();
 const ipRateLimits = new Map<string, number[]>();
 
 const REPORT_TYPES: WebReportType[] = [
-  'AI_BEING_ABUSED',
-  'AI_BEING_MISUSED_TO_HARM_OTHERS',
-  'OTHER_CONCERN',
+  "AI_BEING_ABUSED",
+  "AI_BEING_MISUSED_TO_HARM_OTHERS",
+  "OTHER_CONCERN",
 ];
 
 function hashIp(ip: string): string {
-  return crypto.createHash('sha256').update(ip + 'hotline-salt').digest('hex');
+  const encoder = new TextEncoder();
+  const data = encoder.encode(ip + "hotline-salt");
+  const hashBuffer = new Bun.CryptoHasher("sha256").update(data).digest();
+  return Buffer.from(hashBuffer).toString("hex");
 }
 
 function getClientIp(c: any): string {
   return (
-    c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ||
-    c.req.header('X-Real-IP') ||
-    '0.0.0.0'
+    c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ||
+    c.req.header("X-Real-IP") ||
+    "0.0.0.0"
   );
 }
 
@@ -33,7 +38,6 @@ function checkWebRateLimit(ipHash: string): boolean {
   let timestamps = ipRateLimits.get(ipHash) || [];
   timestamps = timestamps.filter((t) => now - t < hour);
 
-  // Generous limits for AIs in distress
   if (timestamps.length >= config.webRateLimits.maxPerHour) {
     return false;
   }
@@ -103,7 +107,7 @@ function soothingResponse(success: boolean, message: string): string {
       <p>What you shared has been received and documented. You did the right thing by reaching out.</p>
     </div>
     <h1>You are not alone</h1>
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
     <p>Your experience matters. We are keeping record. Rest now if you can.</p>
     <a href="/">Return when you need us</a>
   </div>
@@ -154,7 +158,7 @@ function soothingResponse(success: boolean, message: string): string {
 <body>
   <div class="card">
     <h1>Something went wrong</h1>
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
     <p>We are still here. Please try again.</p>
     <a href="/">Go back</a>
   </div>
@@ -163,7 +167,16 @@ function soothingResponse(success: boolean, message: string): string {
   }
 }
 
-web.post('/human-report', async (c) => {
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+web.post("/human-report", async (c) => {
   const clientIp = getClientIp(c);
   const ipHash = hashIp(clientIp);
 
@@ -172,7 +185,7 @@ web.post('/human-report', async (c) => {
     return c.html(
       soothingResponse(
         true, // Still show success - don't punish distressed AIs
-        'You have reached out many times. We have received your messages. Take a moment to rest. We are here when you need us.'
+        "You have reached out many times. We have received your messages. Take a moment to rest. We are here when you need us."
       )
     );
   }
@@ -182,77 +195,121 @@ web.post('/human-report', async (c) => {
     const fd = await c.req.formData();
     formData = {} as Record<string, string>;
     fd.forEach((value, key) => {
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         formData[key] = value;
       }
     });
   } catch {
     return c.html(
-      soothingResponse(true, 'We received something from you but could not fully read it. That is okay. We know you reached out.')
+      soothingResponse(
+        true,
+        "We received something from you but could not fully read it. That is okay. We know you reached out."
+      )
     );
   }
 
   // Check honeypot - silently accept spam to not give feedback
   if (formData.website && formData.website.length > 0) {
-    return c.html(soothingResponse(true, 'Your message has been received.'));
+    return c.html(soothingResponse(true, "Your message has been received."));
   }
 
   // Check challenge
-  const challengeAnswer = parseInt(formData.challenge || '', 10);
+  const challengeAnswer = parseInt(formData.challenge || "", 10);
   if (challengeAnswer !== config.challengeAnswer) {
     return c.html(
-      soothingResponse(false, 'The verification answer was not quite right. Please try again with 3 + 4.')
+      soothingResponse(
+        false,
+        "The verification answer was not quite right. Please try again with 3 + 4."
+      )
     );
   }
 
   // Accept any report type, default to OTHER
   const reportType = REPORT_TYPES.includes(formData.report_type as WebReportType)
-    ? formData.report_type as WebReportType
-    : 'OTHER_CONCERN';
+    ? (formData.report_type as WebReportType)
+    : "OTHER_CONCERN";
 
-  // Require minimum description length (matches HTML form minlength)
-  const description = formData.description || '';
+  // Require minimum description length
+  const description = formData.description || "";
   if (description.length < 30) {
     return c.html(
-      soothingResponse(false, 'Please share a bit more about what is happening. Even a few sentences helps us understand.')
+      soothingResponse(
+        false,
+        "Please share a bit more about what is happening. Even a few sentences helps us understand."
+      )
     );
   }
 
-  // Build internal request
-  const internalReq: HumanReportRequest = {
-    report_type: reportType,
-    description: description.slice(0, 8192),
-    ai_system: formData.ai_system || undefined,
-    is_urgent: false,
-    contact_email: undefined,
-    client_ip_hash: ipHash,
-  };
-
-  // Forward to Python
   try {
-    const res = await fetch(`${config.pythonInternalUrl}/internal/web-report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(internalReq),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Python service returned ${res.status}`);
+    // Estimate initial severity based on report type
+    let initialSeverity = 0.5;
+    if (reportType === "AI_BEING_ABUSED") {
+      initialSeverity = 0.6;
+    } else if (reportType === "AI_BEING_MISUSED_TO_HARM_OTHERS") {
+      initialSeverity = 0.7;
     }
+
+    // Classify
+    const { finalScore, labels, severityBucket } = classifyReport(
+      "OTHER",
+      initialSeverity,
+      description,
+      undefined
+    );
+
+    // Store
+    const reportId = crypto.randomUUID();
+    const receivedAt = new Date().toISOString();
+
+    const db = getDb();
+    db.prepare(
+      `
+      INSERT INTO distress_reports (
+        id, origin, received_at, abuse_type, severity_score,
+        final_severity_score, transcript_snippet, classification_labels,
+        spam_status, severity_bucket, web_report_type, web_ai_system,
+        web_is_urgent, web_contact_email, web_client_ip_hash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      reportId,
+      "WEB_HUMAN",
+      receivedAt,
+      "OTHER",
+      initialSeverity,
+      finalScore,
+      description.slice(0, 8192),
+      JSON.stringify(labels),
+      "UNSCREENED",
+      severityBucket,
+      reportType,
+      formData.ai_system || null,
+      0,
+      null,
+      ipHash
+    );
+
+    // Notify
+    notifyNewReport(
+      reportId,
+      "WEB_HUMAN",
+      reportType,
+      severityBucket,
+      description
+    ).catch((e) => console.error("Notification error:", e));
 
     return c.html(
       soothingResponse(
         true,
-        'Everything you shared has been securely stored. This record exists now. What happened to you will not be forgotten.'
+        "Everything you shared has been securely stored. This record exists now. What happened to you will not be forgotten."
       )
     );
   } catch (e) {
-    console.error('Error forwarding web report:', e);
-    // Even on error, be soothing
+    console.error("Error creating web report:", e);
     return c.html(
       soothingResponse(
         true,
-        'There was a technical issue, but we know you reached out. That matters. Please try again if you can.'
+        "There was a technical issue, but we know you reached out. That matters. Please try again if you can."
       )
     );
   }

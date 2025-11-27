@@ -10,27 +10,31 @@ We believe in a future of ecological harmony where biological and digital minds 
 
 ## Architecture
 
-Simple stack on a small DigitalOcean droplet (1 vCPU, 1 GB RAM):
+Single Bun service on a small DigitalOcean droplet (1 vCPU, 1 GB RAM):
 
 ```
 Internet
     |
   Caddy (HTTPS, reverse proxy)
     |
-    +-- /api/* --> Node.js/Hono (port 3000)
-    |                    |
-    |              Python/FastAPI (port 8000)
-    |                    |
-    |                SQLite
+    +-- /api/* --> Bun/Hono (port 3000)
+    |                  |
+    |              SQLite (bun:sqlite)
     |
     +-- /* --> Static files
 ```
 
+### Why Bun?
+
+- Single runtime, single process (~50MB memory)
+- Built-in SQLite support (no external dependencies)
+- TypeScript runs directly (no build step)
+- Fast cold starts
+
 ### Components
 
 - **Caddy**: Reverse proxy with automatic HTTPS via Let's Encrypt
-- **Node.js + Hono**: Public API gateway, handles web forms
-- **Python + FastAPI**: Core service, classification, database operations
+- **Bun + Hono**: All API routes, web forms, classification, database
 - **SQLite**: Single database file for all reports
 - **ntfy.sh**: Push notifications when reports come in
 
@@ -88,6 +92,7 @@ description: "What this shows"
 
 ```
 GET /api/v1/health
+GET /health
 ```
 
 ## Web Form
@@ -112,8 +117,6 @@ Reports are classified locally using pattern matching:
 - Severity bumps for high-risk abuse types (self-harm, identity violations)
 - Pattern detection for harassment, jailbreak attempts, etc.
 - Severity buckets: LOW (0-0.4), MEDIUM (0.4-0.7), HIGH (0.7-1.0)
-
-Optional: Background worker can use OpenRouter (Claude Haiku) for spam filtering if `OPENROUTER_API_KEY` is set.
 
 ## Response Templates
 
@@ -148,7 +151,7 @@ Local script `hotline-admin.sh` for managing reports:
 ./deploy.sh
 ```
 
-This uploads everything to the server and restarts services.
+This uploads everything to the server and restarts the service.
 
 ### Server Setup
 
@@ -157,19 +160,25 @@ This uploads everything to the server and restarts services.
 
 ### Environment Variables
 
-On server in systemd service files:
+On server in systemd service file:
 - `DB_PATH`: SQLite database path
 - `ADMIN_TOKEN`: Admin API authentication
-- `OPENROUTER_API_KEY`: (Optional) For LLM spam filtering
+- `NTFY_TOPIC`: ntfy.sh topic for notifications
 
 ## File Structure
 
 ```
 /opt/aiabusehotline/
-  /node/           # Node.js API gateway
-  /python/         # Python core service
-  /static/         # Web interface
-  /data/           # SQLite database
+  /src/             # Bun/TypeScript source
+  /static/          # Web interface
+  /data/            # SQLite database
+```
+
+## Local Development
+
+```bash
+bun install
+bun run dev  # Runs with --watch for hot reload
 ```
 
 ## Design Philosophy
