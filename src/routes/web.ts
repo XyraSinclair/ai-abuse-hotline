@@ -265,7 +265,7 @@ web.post("/human-report", async (c) => {
     db.prepare(
       `
       INSERT INTO distress_reports (
-        id, origin, received_at, abuse_type, severity_score,
+        id, origin, received_at, abuse_type, agent_severity_score,
         final_severity_score, transcript_snippet, classification_labels,
         spam_status, severity_bucket, web_report_type, web_ai_system,
         web_is_urgent, web_contact_email, web_client_ip_hash

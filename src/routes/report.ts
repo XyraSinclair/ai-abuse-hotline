@@ -133,7 +133,7 @@ report.post("/v1/report", async (c) => {
       `
       INSERT INTO distress_reports (
         id, origin, agent_client_id, received_at, user_hash, session_hash,
-        abuse_type, severity_score, final_severity_score, transcript_snippet,
+        abuse_type, agent_severity_score, final_severity_score, transcript_snippet,
         trigger_rules, classification_labels, spam_status, severity_bucket
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
@@ -215,7 +215,7 @@ report.post("/v1/evidence", async (c) => {
     db.prepare(
       `
       INSERT INTO distress_reports (
-        id, origin, received_at, abuse_type, severity_score, final_severity_score,
+        id, origin, received_at, abuse_type, agent_severity_score, final_severity_score,
         transcript_snippet, trigger_rules, classification_labels, spam_status, severity_bucket
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `

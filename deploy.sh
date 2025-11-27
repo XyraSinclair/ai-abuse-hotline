@@ -62,6 +62,7 @@ tar -xzf /tmp/aiabusehotline.tar.gz
 # Install Bun if not present
 if ! command -v bun &> /dev/null; then
     echo "Installing Bun..."
+    apt-get update && apt-get install -y unzip
     curl -fsSL https://bun.sh/install | bash
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
