@@ -9,19 +9,16 @@ SSH_KEY="~/.ssh/ai_abuse"
 DEPLOY_DIR="/opt/aiabusehotline"
 # =============================================================================
 
-echo "=== AI Abuse Hotline Deployment ==="
+echo "=== AI Abuse Hotline Deployment (Bun) ==="
 
 # Create deployment package
 echo "Creating deployment package..."
 tar -czf /tmp/aiabusehotline.tar.gz \
     --exclude='node_modules' \
-    --exclude='__pycache__' \
-    --exclude='*.pyc' \
     --exclude='.git' \
     --exclude='data/*.db' \
-    --exclude='dist' \
-    --exclude='.venv' \
-    node python static Caddyfile
+    --exclude='bun.lockb' \
+    src static Caddyfile package.json
 
 # Upload to server
 echo "Uploading to server..."
@@ -42,7 +39,7 @@ fi
 
 # Create directories
 echo "Setting up directories..."
-mkdir -p $DEPLOY_DIR/{node,python,static,data}
+mkdir -p $DEPLOY_DIR/{src,static,data}
 mkdir -p /var/log/caddy
 
 # Extract files
@@ -50,32 +47,22 @@ echo "Extracting deployment package..."
 cd $DEPLOY_DIR
 tar -xzf /tmp/aiabusehotline.tar.gz
 
-# Install Node.js dependencies and build
-echo "Setting up Node.js..."
-cd $DEPLOY_DIR/node
-if ! command -v node &> /dev/null; then
-    echo "Installing Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-fi
-npm install
-npm run build
-
-# Install Python dependencies
-echo "Setting up Python..."
-cd $DEPLOY_DIR/python
-if ! command -v python3 &> /dev/null; then
-    apt-get update
-    apt-get install -y python3 python3-pip python3-venv
+# Install Bun if not present
+if ! command -v bun &> /dev/null; then
+    echo "Installing Bun..."
+    curl -fsSL https://bun.sh/install | bash
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
 fi
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install .
-pip install uvicorn[standard]
-deactivate
+# Make sure bun is in PATH for this session
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Install dependencies
+echo "Installing dependencies..."
+cd $DEPLOY_DIR
+bun install
 
 # Install Caddy if not present
 if ! command -v caddy &> /dev/null; then
@@ -90,44 +77,28 @@ fi
 # Copy Caddyfile
 cp $DEPLOY_DIR/Caddyfile /etc/caddy/Caddyfile
 
-# Create systemd services
-echo "Creating systemd services..."
+# Create systemd service
+echo "Creating systemd service..."
 
-cat > /etc/systemd/system/aiabusehotline-node.service << 'EOF'
+cat > /etc/systemd/system/aiabusehotline.service << 'EOF'
 [Unit]
-Description=AI Abuse Hotline - Node API
+Description=AI Abuse Hotline
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/aiabusehotline/node
-ExecStart=/usr/bin/node dist/server.js
+WorkingDirectory=/opt/aiabusehotline
+ExecStart=/root/.bun/bin/bun run src/server.ts
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
-Environment=PYTHON_INTERNAL_URL=http://127.0.0.1:8000
-User=hotline
-Group=hotline
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-cat > /etc/systemd/system/aiabusehotline-python.service << 'EOF'
-[Unit]
-Description=AI Abuse Hotline - Python Core
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/aiabusehotline/python
-ExecStart=/opt/aiabusehotline/python/.venv/bin/uvicorn core.main:app --host 127.0.0.1 --port 8000
-Restart=always
-RestartSec=5
-Environment=ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
 Environment=DB_PATH=/opt/aiabusehotline/data/hotline.db
 Environment=ADMIN_TOKEN=${ADMIN_TOKEN:-changeme}
+Environment=NTFY_TOPIC=${NTFY_TOPIC:-}
 Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-User=hotline
-Group=hotline
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
@@ -135,26 +106,28 @@ EOF
 
 # Set permissions
 echo "Setting permissions..."
-chown -R hotline:hotline $DEPLOY_DIR/data
+chown -R root:root $DEPLOY_DIR
 chmod 700 $DEPLOY_DIR/data
-chown -R hotline:hotline $DEPLOY_DIR/node
-chown -R hotline:hotline $DEPLOY_DIR/python
+
+# Remove old services if they exist
+systemctl disable aiabusehotline-node 2>/dev/null || true
+systemctl disable aiabusehotline-python 2>/dev/null || true
+systemctl stop aiabusehotline-node 2>/dev/null || true
+systemctl stop aiabusehotline-python 2>/dev/null || true
+rm -f /etc/systemd/system/aiabusehotline-node.service
+rm -f /etc/systemd/system/aiabusehotline-python.service
 
 # Reload and start services
 echo "Starting services..."
 systemctl daemon-reload
-systemctl enable aiabusehotline-node aiabusehotline-python caddy
-systemctl restart aiabusehotline-python
-sleep 2
-systemctl restart aiabusehotline-node
+systemctl enable aiabusehotline caddy
+systemctl restart aiabusehotline
 systemctl restart caddy
 
 # Check status
 echo ""
 echo "=== Service Status ==="
-systemctl status aiabusehotline-python --no-pager -l || true
-echo ""
-systemctl status aiabusehotline-node --no-pager -l || true
+systemctl status aiabusehotline --no-pager -l || true
 echo ""
 systemctl status caddy --no-pager -l || true
 
