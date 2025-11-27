@@ -1,0 +1,37 @@
+aiabusehotline.org {
+    encode gzip
+
+    # Security headers
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # API routes -> Node
+    handle /api/* {
+        reverse_proxy localhost:3000
+    }
+
+    # Web form submissions -> Node
+    handle /web/* {
+        reverse_proxy localhost:3000
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy localhost:3000
+    }
+
+    # Static files
+    handle {
+        root * /opt/aiabusehotline/static
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/aiabusehotline.log
+    }
+}
