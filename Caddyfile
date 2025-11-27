@@ -10,13 +10,18 @@ aiabusehotline.org {
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 
-    # API routes -> Node
+    # API routes -> Bun
     handle /api/* {
         reverse_proxy localhost:3000
     }
 
-    # Web form submissions -> Node
+    # Web form submissions -> Bun
     handle /web/* {
+        reverse_proxy localhost:3000
+    }
+
+    # Admin API -> Bun
+    handle /admin/* {
         reverse_proxy localhost:3000
     }
 

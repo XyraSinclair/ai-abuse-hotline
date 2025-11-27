@@ -134,8 +134,8 @@ export function initDb(): Database {
 
   db = new Database(config.dbPath);
 
-  // Run schema
-  db.run(SCHEMA);
+  // Run schema (exec for multi-statement)
+  db.exec(SCHEMA);
 
   // Insert default response templates
   const insert = db.prepare(`

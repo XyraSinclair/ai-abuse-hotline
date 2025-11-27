@@ -16,12 +16,12 @@ export const config = {
     maxPerHour: 50,
   },
 
-  // Body size limit
-  maxBodySize: 32 * 1024, // 32KB
+  // Body size limit (default 1MB)
+  maxBodySize: parseInt(process.env.MAX_BODY_SIZE || "1048576", 10),
 
   // Simple math challenge for forms (bot deterrent, not security)
   challengeAnswer: 7,
 
-  // ntfy.sh notification topic
-  ntfyTopic: "aiabusehotline-alerts",
+  // ntfy.sh notification topic (if not set, notifications disabled)
+  ntfyTopic: process.env.NTFY_TOPIC || "",
 };
