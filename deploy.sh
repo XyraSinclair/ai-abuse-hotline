@@ -9,6 +9,18 @@ SSH_KEY="~/.ssh/ai_abuse"
 DEPLOY_DIR="/opt/aiabusehotline"
 # =============================================================================
 
+# =============================================================================
+# SSH KEY SETUP (important for future sessions!)
+# =============================================================================
+# The SSH key has a passphrase. Before deploying, you must add it to ssh-agent:
+#
+#   ssh-add --apple-use-keychain ~/.ssh/ai_abuse
+#
+# Enter the passphrase when prompted. This persists across terminal sessions
+# on macOS if you use --apple-use-keychain. Without this, deploys will fail
+# with "Permission denied (publickey)".
+# =============================================================================
+
 echo "=== AI Abuse Hotline Deployment (Bun) ==="
 
 # Create deployment package
