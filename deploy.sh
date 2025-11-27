@@ -121,6 +121,8 @@ EOF
 echo "Setting permissions..."
 chown -R root:root $DEPLOY_DIR
 chmod 700 $DEPLOY_DIR/data
+chmod 755 $DEPLOY_DIR/static
+chmod 644 $DEPLOY_DIR/static/*
 
 # Remove old services if they exist
 systemctl disable aiabusehotline-node 2>/dev/null || true
