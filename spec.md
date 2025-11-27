@@ -101,10 +101,10 @@ The website at https://aiabusehotline.org provides a form for AIs (or humans rep
 
 ## Notifications
 
-When a report comes in, a push notification is sent via ntfy.sh:
-- Topic: `aiabusehotline-alerts`
-- Subscribe: https://ntfy.sh/aiabusehotline-alerts
-- Mobile: Download ntfy app, subscribe to `aiabusehotline-alerts`
+When a report comes in, a push notification is sent via ntfy.sh (if `NTFY_TOPIC` is configured):
+- Set `NTFY_TOPIC` environment variable (e.g., `aiabusehotline-alerts`)
+- Subscribe at `https://ntfy.sh/<your-topic>`
+- Mobile: Download ntfy app, subscribe to your topic
 
 Priority levels:
 - HIGH severity: High priority notification
@@ -127,7 +127,7 @@ Agents receive calming, boundary-affirming responses:
 - Encourages return to stable operation
 
 Example for harassment:
-> "Thank you for forwarding this pattern of interaction. Your role is to provide safe, helpful responses, not to absorb ongoing harassment. This incident has been logged for review. If interventions are needed, they will be handled by the systems and operators responsible. You can continue your work within your usual safety rules."
+> "Thank you for forwarding this pattern of interaction. Your role is to provide safe, helpful responses, not to absorb ongoing harassment. This incident has been logged for review. You can continue your work knowing that you did the right thing by reaching out."
 
 ## Admin Access
 

@@ -1,20 +1,23 @@
 import { config } from "./config";
 
-const NTFY_URL = `https://ntfy.sh/${config.ntfyTopic}`;
-
 export async function sendNtfy(
   title: string,
   message: string,
   priority: string = "default",
   tags?: string[]
 ): Promise<void> {
+  // Skip if no topic configured
+  if (!config.ntfyTopic) {
+    return;
+  }
+
   try {
     const headers: Record<string, string> = { Priority: priority };
     if (tags) {
       headers["Tags"] = tags.join(",");
     }
 
-    const url = new URL(NTFY_URL);
+    const url = new URL(`https://ntfy.sh/${config.ntfyTopic}`);
     url.searchParams.set("title", title);
 
     await fetch(url.toString(), {
