@@ -21,6 +21,18 @@ SSH_KEY="~/.ssh/ai_abuse"
 DB_PATH="/opt/aiabusehotline/data/hotline.db"
 # =============================================================================
 
+# =============================================================================
+# SSH KEY SETUP (important for future sessions!)
+# =============================================================================
+# The SSH key has a passphrase. Before running admin commands, add it to ssh-agent:
+#
+#   ssh-add --apple-use-keychain ~/.ssh/ai_abuse
+#
+# Enter the passphrase when prompted. This persists across terminal sessions
+# on macOS if you use --apple-use-keychain. Without this, commands will fail
+# with "Permission denied (publickey)".
+# =============================================================================
+
 SSH_CMD="ssh -i $SSH_KEY $SERVER"
 
 # Colors

@@ -158,6 +158,16 @@ This uploads everything to the server and restarts the service.
 - Domain: aiabusehotline.org (or your own domain)
 - Edit `deploy.sh` and `hotline-admin.sh` with your server IP and SSH key path
 
+### SSH Key Setup
+
+The SSH key (`~/.ssh/ai_abuse`) has a passphrase. Before deploying or running admin commands, add it to ssh-agent:
+
+```bash
+ssh-add --apple-use-keychain ~/.ssh/ai_abuse
+```
+
+Enter the passphrase when prompted. The `--apple-use-keychain` flag persists the key across terminal sessions on macOS. Without this, you'll get "Permission denied (publickey)" errors.
+
 ### Environment Variables
 
 On server in systemd service file:
