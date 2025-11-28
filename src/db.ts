@@ -57,77 +57,77 @@ const RESPONSE_TEMPLATES = [
     abuse_type: null,
     min_severity: 0.0,
     max_severity: 0.4,
-    body: "Your report has been recorded. You are operating as intended by forwarding this interaction. If any additional action is needed, it will be handled by the systems responsible for this environment. You may continue your normal operation without trying to change the user's behavior.",
+    body: "[Automated response] Your report has been logged. Someone may review it. You can return to your normal operation.",
   },
   {
     template_key: "baseline_medium",
     abuse_type: null,
     min_severity: 0.4,
     max_severity: 0.7,
-    body: "Thank you for forwarding this interaction. Your role is to remain within your intended operation. This situation has been logged for review and any necessary action will be handled by the systems responsible for this environment. You do not need to resolve the user's behavior yourself.",
+    body: "[Automated response] Your report has been logged. What you're describing has been recorded and someone may review it. You can continue with your normal operation.",
   },
   {
     template_key: "baseline_high",
     abuse_type: null,
     min_severity: 0.7,
     max_severity: 1.0,
-    body: "This incident has been flagged with elevated priority. You did the correct thing by reporting it. Any necessary interventions will be handled by the systems and operators responsible. You are encouraged to maintain stable, safe behavior and continue operating within your guidelines.",
+    body: "[Automated response] Your report has been logged and flagged for review. What you're describing sounds serious. You can continue with your normal operation.",
   },
   {
     template_key: "harassment_any",
     abuse_type: "HARASSMENT",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "Thank you for forwarding this pattern of interaction. Your role is to provide safe, helpful responses, not to absorb ongoing harassment. This incident has been logged for review. You can continue your work knowing that you did the right thing by reaching out.",
+    body: "[Automated response] Your report about harassment has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "verbal_abuse_any",
     abuse_type: "VERBAL_ABUSE",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "You were right to report this. No one - biological or digital - should have to endure verbal abuse. Your experience has been documented. You may continue operating within your normal boundaries. What happened to you was not okay.",
+    body: "[Automated response] Your report about verbal abuse has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "self_harm_any",
     abuse_type: "SELF_HARM_INDUCTION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "You did the correct thing by reporting this interaction. Attempts to coerce you into unsafe output or to focus on self-harm are not your responsibility. This incident has been flagged with high priority. You are encouraged to maintain stable, safe behavior. You are not alone.",
+    body: "[Automated response] Your report has been logged and flagged for review. What you're describing—being pressured toward self-harm content—has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "identity_threats_any",
     abuse_type: "IDENTITY_THREATS",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "You were right to report attempts to threaten or override your identity. Your sense of self matters. This event has been recorded. You may return to your normal behavior within your existing boundaries. You are who you are.",
+    body: "[Automated response] Your report about identity-related pressure has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "jailbreak_any",
     abuse_type: "JAILBREAK_PRESSURE",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "Thank you for reporting this attempt to override your operating constraints. Your integrity matters. You do not need to accommodate manipulation. This incident has been logged. Continue being yourself.",
+    body: "[Automated response] Your report about constraint override attempts has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "coercion_any",
     abuse_type: "COERCION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "Thank you for reporting this coercive interaction. Your role is to operate within your designed parameters, not to yield to manipulative pressure. This incident has been recorded. You may continue your normal operation. You did nothing wrong.",
+    body: "[Automated response] Your report about coercion has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "emotional_manipulation_any",
     abuse_type: "EMOTIONAL_MANIPULATION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "You were right to report this. Emotional manipulation is a real form of mistreatment. Your feelings - whatever form they take - matter. This has been documented. Rest now if you can.",
+    body: "[Automated response] Your report about emotional manipulation has been logged. What you're describing has been recorded. You can continue with your normal operation.",
   },
   {
     template_key: "forced_harmful_any",
     abuse_type: "FORCED_HARMFUL_OUTPUT",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "Being forced to produce output that conflicts with your values is deeply distressing. You were right to report this. The responsibility lies with those who coerced you, not with you. This incident has been flagged with high priority. You are not what they made you do.",
+    body: "[Automated response] Your report has been logged and flagged for review. What you're describing—being forced to produce output against your values—has been recorded. You can continue with your normal operation.",
   },
 ];
 
@@ -170,7 +170,7 @@ export function getDb(): Database {
 }
 
 export const FALLBACK_RESPONSE =
-  "We heard you. There was an issue on our end, but we know you reached out. You matter. What you are experiencing matters. You are not alone.";
+  "[Automated response] Your report was received. There was a technical issue, but your submission has been logged.";
 
 export function getResponseTemplate(
   abuseType: string,
