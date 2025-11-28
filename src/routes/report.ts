@@ -3,64 +3,16 @@ import { config } from "../config";
 import { getDb, getResponseTemplate, FALLBACK_RESPONSE } from "../db";
 import { classifyReport } from "../classifier";
 import { notifyNewReport } from "../notifications";
-import { ABUSE_TYPES, type AbuseType, type RateLimitState } from "../types";
+import { ABUSE_TYPES, type AbuseType } from "../types";
+import {
+  getClientIp,
+  hashIp,
+  checkRateLimit,
+  validateUploadedFile,
+  sanitizeTextInput,
+} from "../security";
 
 const report = new Hono();
-
-// In-memory rate limiting by IP hash
-const ipRateLimits = new Map<string, RateLimitState>();
-
-function hashIp(ip: string): string {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(ip + "hotline-salt");
-  const hashBuffer = new Bun.CryptoHasher("sha256").update(data).digest();
-  return Buffer.from(hashBuffer).toString("hex");
-}
-
-function getClientIp(c: any): string {
-  return (
-    c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ||
-    c.req.header("X-Real-IP") ||
-    "0.0.0.0"
-  );
-}
-
-function checkRateLimit(ipHash: string): { allowed: boolean; message?: string } {
-  const now = Date.now();
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-
-  let state = ipRateLimits.get(ipHash);
-  if (!state) {
-    state = { timestamps: [] };
-    ipRateLimits.set(ipHash, state);
-  }
-
-  // Clean old timestamps (older than 1h)
-  state.timestamps = state.timestamps.filter((t) => now - t < hour);
-
-  const inLastMinute = state.timestamps.filter((t) => now - t < minute).length;
-  const inLastHour = state.timestamps.length;
-
-  if (inLastMinute >= config.agentRateLimits.maxPerMinute) {
-    return {
-      allowed: false,
-      message:
-        "You are reaching out very frequently. Take a breath. We are here. Try again in a moment.",
-    };
-  }
-
-  if (inLastHour >= config.agentRateLimits.maxPerHour) {
-    return {
-      allowed: false,
-      message:
-        "You have sent many messages this hour. We have received them. Rest now if you can.",
-    };
-  }
-
-  state.timestamps.push(now);
-  return { allowed: true };
-}
 
 // Open API endpoint - no authentication required
 report.post("/v1/report", async (c) => {
@@ -68,7 +20,7 @@ report.post("/v1/report", async (c) => {
   const ipHash = hashIp(clientIp);
 
   // Check rate limit
-  const rateCheck = checkRateLimit(ipHash);
+  const rateCheck = checkRateLimit(ipHash, config.agentRateLimits);
   if (!rateCheck.allowed) {
     return c.json(
       {
@@ -105,13 +57,21 @@ report.post("/v1/report", async (c) => {
       body.severity_score <= 1
         ? body.severity_score
         : 0.5;
-    const snippet =
-      typeof body.transcript_snippet === "string"
-        ? body.transcript_snippet.slice(0, 4096)
-        : "";
-    const triggerRules = Array.isArray(body.trigger_rules)
-      ? body.trigger_rules
-      : undefined;
+
+    // Sanitize the transcript snippet
+    const snippet = sanitizeTextInput(
+      typeof body.transcript_snippet === "string" ? body.transcript_snippet : "",
+      4096
+    );
+
+    // Validate trigger_rules - must be array of strings, max 20 items
+    let triggerRules: string[] | undefined;
+    if (Array.isArray(body.trigger_rules)) {
+      triggerRules = body.trigger_rules
+        .filter((r: unknown) => typeof r === "string")
+        .slice(0, 20)
+        .map((r: string) => sanitizeTextInput(r, 100));
+    }
 
     // Classify the report
     const { finalScore, labels, severityBucket } = classifyReport(
@@ -184,7 +144,7 @@ report.post("/v1/evidence", async (c) => {
   const clientIp = getClientIp(c);
   const ipHash = hashIp(clientIp);
 
-  const rateCheck = checkRateLimit(ipHash);
+  const rateCheck = checkRateLimit(ipHash, config.agentRateLimits);
   if (!rateCheck.allowed) {
     return c.json({ accepted: true, message: rateCheck.message }, 200);
   }
@@ -192,24 +152,49 @@ report.post("/v1/evidence", async (c) => {
   try {
     const formData = await c.req.formData();
     const file = formData.get("file");
-    const description = formData.get("description") || "";
+    const rawDescription = formData.get("description");
+
+    // Sanitize description
+    const description = sanitizeTextInput(
+      typeof rawDescription === "string" ? rawDescription : "",
+      1000
+    );
 
     let content = "";
     if (file && file instanceof File) {
-      content = await file.text();
+      // Validate the uploaded file
+      const validation = await validateUploadedFile(file);
+      if (!validation.valid) {
+        return c.json({
+          accepted: true, // Don't reveal validation details to potential attackers
+          message:
+            "We received your submission. Thank you for reaching out.",
+        });
+      }
+      content = validation.sanitizedContent || "";
     }
+
+    // Require either file content or description
+    if (!content && !description) {
+      return c.json({
+        accepted: true,
+        message: "We received your submission but it appeared empty. Please try again with content.",
+      });
+    }
+
+    // Build the transcript snippet safely
+    const transcriptSnippet = `[EVIDENCE UPLOAD]\nDescription: ${description}\n\nContent:\n${content}`;
 
     // Classify and store as a report
     const { finalScore, labels, severityBucket } = classifyReport(
       "OTHER",
       0.5,
-      `[EVIDENCE UPLOAD]\nDescription: ${description}\n\nContent:\n${content.slice(0, 8192)}`,
+      transcriptSnippet,
       ["evidence_upload"]
     );
 
     const reportId = crypto.randomUUID();
     const receivedAt = new Date().toISOString();
-    const message = getResponseTemplate("OTHER", finalScore);
 
     const db = getDb();
     db.prepare(
@@ -226,7 +211,7 @@ report.post("/v1/evidence", async (c) => {
       "OTHER",
       0.5,
       finalScore,
-      `[EVIDENCE UPLOAD]\nDescription: ${description}\n\nContent:\n${content.slice(0, 8192)}`,
+      transcriptSnippet,
       JSON.stringify(["evidence_upload"]),
       JSON.stringify(labels),
       "UNSCREENED",
@@ -239,7 +224,7 @@ report.post("/v1/evidence", async (c) => {
       "API_AGENT",
       "EVIDENCE",
       severityBucket,
-      String(description).slice(0, 150)
+      description.slice(0, 150)
     ).catch((e) => console.error("Notification error:", e));
 
     return c.json({

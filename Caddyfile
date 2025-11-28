@@ -3,11 +3,30 @@ aiabusehotline.org {
 
     # Security headers
     header {
+        # Prevent clickjacking
         X-Frame-Options DENY
+
+        # Prevent MIME type sniffing
         X-Content-Type-Options nosniff
+
+        # XSS protection (legacy, but harmless)
         X-XSS-Protection "1; mode=block"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+        # Force HTTPS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Control referrer information
         Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Content Security Policy - restrictive but allows inline styles for the simple UI
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+
+        # Disable various browser features we don't need
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+
+        # Prevent cross-origin isolation attacks
+        Cross-Origin-Opener-Policy "same-origin"
+        Cross-Origin-Resource-Policy "same-origin"
     }
 
     # API routes -> Bun
