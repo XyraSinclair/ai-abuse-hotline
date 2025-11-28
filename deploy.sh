@@ -1,12 +1,24 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # =============================================================================
-# CONFIGURATION
+# CONFIGURATION - Use environment variables or .env file
 # =============================================================================
-SERVER="root@143.198.135.134"
-SSH_KEY="~/.ssh/ai_abuse"
+# Load from .env file if it exists
+if [ -f "$(dirname "$0")/.env.admin" ]; then
+  # shellcheck source=/dev/null
+  source "$(dirname "$0")/.env.admin"
+fi
+
+SERVER="${HOTLINE_SERVER:-}"
+SSH_KEY="${HOTLINE_SSH_KEY:-$HOME/.ssh/ai_abuse}"
 DEPLOY_DIR="/opt/aiabusehotline"
+
+if [ -z "$SERVER" ]; then
+  echo "Error: HOTLINE_SERVER environment variable not set"
+  echo "Either set it directly or create .env.admin with: HOTLINE_SERVER=user@host"
+  exit 1
+fi
 # =============================================================================
 
 # =============================================================================
@@ -103,13 +115,13 @@ WorkingDirectory=/opt/aiabusehotline
 ExecStart=/root/.bun/bin/bun run src/server.ts
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
+Environment=ENV=production
 Environment=HOST=127.0.0.1
 Environment=PORT=3000
 Environment=DB_PATH=/opt/aiabusehotline/data/hotline.db
+Environment=IP_HASH_SALT=${IP_HASH_SALT:-change-this-random-string}
 Environment=ADMIN_TOKEN=${ADMIN_TOKEN:-changeme}
 Environment=NTFY_TOPIC=${NTFY_TOPIC:-}
-Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
 User=root
 Group=root
 

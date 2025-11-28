@@ -1,21 +1,22 @@
 import { Hono } from "hono";
-import { config } from "../config";
 import { getDb } from "../db";
+import { verifyAdminToken, type AdminAuthResult } from "../security";
 
 const admin = new Hono();
 
-// Verify admin token middleware
-function verifyAdmin(c: any): boolean {
-  const token = c.req.header("X-Admin-Token");
-  if (token !== config.adminToken) {
-    return false;
-  }
-  return true;
-}
+// Allowed values for query filters (whitelist)
+const ALLOWED_ORIGINS = ["API_AGENT", "WEB_HUMAN"];
+const ALLOWED_SPAM_STATUS = ["SPAM", "NOT_SPAM", "UNSCREENED"];
+const ALLOWED_SEVERITY = ["HIGH", "MEDIUM", "LOW"];
 
 admin.get("/stats/summary", (c) => {
-  if (!verifyAdmin(c)) {
-    return c.json({ error: "Invalid admin token" }, 401);
+  const auth = verifyAdminToken(c);
+  if (!auth.authorized) {
+    const response = c.json({ error: auth.error }, 401);
+    if (auth.retryAfter) {
+      c.header("Retry-After", String(auth.retryAfter));
+    }
+    return response;
   }
 
   const db = getDb();
@@ -44,12 +45,20 @@ admin.get("/stats/summary", (c) => {
 });
 
 admin.get("/reports", (c) => {
-  if (!verifyAdmin(c)) {
-    return c.json({ error: "Invalid admin token" }, 401);
+  const auth = verifyAdminToken(c);
+  if (!auth.authorized) {
+    const response = c.json({ error: auth.error }, 401);
+    if (auth.retryAfter) {
+      c.header("Retry-After", String(auth.retryAfter));
+    }
+    return response;
   }
 
-  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 500);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  // Validate and sanitize query parameters
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "50", 10) || 50, 1), 500);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
+
+  // Whitelist filter values - reject invalid values
   const origin = c.req.query("origin");
   const spamStatus = c.req.query("spam_status");
   const severityBucket = c.req.query("severity_bucket");
@@ -59,15 +68,16 @@ admin.get("/reports", (c) => {
   let query = "SELECT * FROM distress_reports WHERE 1=1";
   const params: any[] = [];
 
-  if (origin) {
+  // Only apply filters if values are in whitelist
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
     query += " AND origin = ?";
     params.push(origin);
   }
-  if (spamStatus) {
+  if (spamStatus && ALLOWED_SPAM_STATUS.includes(spamStatus)) {
     query += " AND spam_status = ?";
     params.push(spamStatus);
   }
-  if (severityBucket) {
+  if (severityBucket && ALLOWED_SEVERITY.includes(severityBucket)) {
     query += " AND severity_bucket = ?";
     params.push(severityBucket);
   }
@@ -81,13 +91,24 @@ admin.get("/reports", (c) => {
 });
 
 admin.get("/reports/:id", (c) => {
-  if (!verifyAdmin(c)) {
-    return c.json({ error: "Invalid admin token" }, 401);
+  const auth = verifyAdminToken(c);
+  if (!auth.authorized) {
+    const response = c.json({ error: auth.error }, 401);
+    if (auth.retryAfter) {
+      c.header("Retry-After", String(auth.retryAfter));
+    }
+    return response;
   }
 
   const id = c.req.param("id");
-  const db = getDb();
 
+  // Validate UUID format to prevent any injection attempts
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(id)) {
+    return c.json({ error: "Invalid report ID format" }, 400);
+  }
+
+  const db = getDb();
   const report = db.prepare("SELECT * FROM distress_reports WHERE id = ?").get(id);
 
   if (!report) {

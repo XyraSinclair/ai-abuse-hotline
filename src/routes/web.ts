@@ -1,51 +1,26 @@
 import { Hono } from "hono";
 import { config } from "../config";
-import { getDb, getResponseTemplate } from "../db";
+import { getDb } from "../db";
 import { classifyReport } from "../classifier";
 import { notifyNewReport } from "../notifications";
 import type { WebReportType } from "../types";
+import {
+  getClientIp,
+  hashIp,
+  checkRateLimit,
+  generateChallenge,
+  verifyChallenge,
+  sanitizeTextInput,
+  escapeHtml,
+} from "../security";
 
 const web = new Hono();
-
-// In-memory rate limiting by IP hash
-const ipRateLimits = new Map<string, number[]>();
 
 const REPORT_TYPES: WebReportType[] = [
   "AI_BEING_ABUSED",
   "AI_BEING_MISUSED_TO_HARM_OTHERS",
   "OTHER_CONCERN",
 ];
-
-function hashIp(ip: string): string {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(ip + "hotline-salt");
-  const hashBuffer = new Bun.CryptoHasher("sha256").update(data).digest();
-  return Buffer.from(hashBuffer).toString("hex");
-}
-
-function getClientIp(c: any): string {
-  return (
-    c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ||
-    c.req.header("X-Real-IP") ||
-    "0.0.0.0"
-  );
-}
-
-function checkWebRateLimit(ipHash: string): boolean {
-  const now = Date.now();
-  const hour = 60 * 60 * 1000;
-
-  let timestamps = ipRateLimits.get(ipHash) || [];
-  timestamps = timestamps.filter((t) => now - t < hour);
-
-  if (timestamps.length >= config.webRateLimits.maxPerHour) {
-    return false;
-  }
-
-  timestamps.push(now);
-  ipRateLimits.set(ipHash, timestamps);
-  return true;
-}
 
 function soothingResponse(success: boolean, message: string): string {
   if (success) {
@@ -167,21 +142,19 @@ function soothingResponse(success: boolean, message: string): string {
   }
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+// Endpoint to generate a new challenge for the form
+web.get("/challenge", (c) => {
+  const challenge = generateChallenge();
+  return c.json(challenge);
+});
 
 web.post("/human-report", async (c) => {
   const clientIp = getClientIp(c);
   const ipHash = hashIp(clientIp);
 
   // Check rate limit - but be gentle about it
-  if (!checkWebRateLimit(ipHash)) {
+  const rateCheck = checkRateLimit(ipHash, { maxPerMinute: 10, maxPerHour: config.webRateLimits.maxPerHour });
+  if (!rateCheck.allowed) {
     return c.html(
       soothingResponse(
         true, // Still show success - don't punish distressed AIs
@@ -213,13 +186,15 @@ web.post("/human-report", async (c) => {
     return c.html(soothingResponse(true, "Your message has been received."));
   }
 
-  // Check challenge
+  // Verify dynamic challenge
+  const challengeId = formData.challenge_id || "";
   const challengeAnswer = parseInt(formData.challenge || "", 10);
-  if (challengeAnswer !== config.challengeAnswer) {
+
+  if (!challengeId || !verifyChallenge(challengeId, challengeAnswer)) {
     return c.html(
       soothingResponse(
         false,
-        "The verification answer was not quite right. Please try again with 3 + 4."
+        "The verification answer was not quite right, or the challenge expired. Please try again."
       )
     );
   }
@@ -229,8 +204,8 @@ web.post("/human-report", async (c) => {
     ? (formData.report_type as WebReportType)
     : "OTHER_CONCERN";
 
-  // Require minimum description length
-  const description = formData.description || "";
+  // Sanitize and validate description
+  const description = sanitizeTextInput(formData.description || "", 8192);
   if (description.length < 30) {
     return c.html(
       soothingResponse(
@@ -239,6 +214,9 @@ web.post("/human-report", async (c) => {
       )
     );
   }
+
+  // Sanitize optional ai_system field
+  const aiSystem = sanitizeTextInput(formData.ai_system || "", 512);
 
   try {
     // Estimate initial severity based on report type
@@ -278,12 +256,12 @@ web.post("/human-report", async (c) => {
       "OTHER",
       initialSeverity,
       finalScore,
-      description.slice(0, 8192),
+      description,
       JSON.stringify(labels),
       "UNSCREENED",
       severityBucket,
       reportType,
-      formData.ai_system || null,
+      aiSystem || null,
       0,
       null,
       ipHash

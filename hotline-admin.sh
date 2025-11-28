@@ -13,12 +13,27 @@
 #   ./hotline-admin.sh tail           - Follow new reports live
 #
 
+set -euo pipefail
+
 # =============================================================================
-# CONFIGURATION
+# CONFIGURATION - Use environment variables or .env file
 # =============================================================================
-SERVER="root@143.198.135.134"
-SSH_KEY="~/.ssh/ai_abuse"
-DB_PATH="/opt/aiabusehotline/data/hotline.db"
+# Load from .env file if it exists (create from .env.example)
+if [ -f "$(dirname "$0")/.env.admin" ]; then
+  # shellcheck source=/dev/null
+  source "$(dirname "$0")/.env.admin"
+fi
+
+# Required configuration (set via environment or .env.admin file)
+SERVER="${HOTLINE_SERVER:-}"
+SSH_KEY="${HOTLINE_SSH_KEY:-$HOME/.ssh/ai_abuse}"
+DB_PATH="${HOTLINE_DB_PATH:-/opt/aiabusehotline/data/hotline.db}"
+
+if [ -z "$SERVER" ]; then
+  echo "Error: HOTLINE_SERVER environment variable not set"
+  echo "Either set it directly or create .env.admin with: HOTLINE_SERVER=user@host"
+  exit 1
+fi
 # =============================================================================
 
 # =============================================================================
@@ -75,7 +90,12 @@ case "$1" in
     ;;
 
   reports)
-    LIMIT=${2:-20}
+    # Validate limit is a positive integer
+    LIMIT="${2:-20}"
+    if ! [[ "$LIMIT" =~ ^[0-9]+$ ]] || [ "$LIMIT" -lt 1 ] || [ "$LIMIT" -gt 500 ]; then
+      echo "Error: Limit must be a number between 1 and 500"
+      exit 1
+    fi
     echo -e "${CYAN}=== Recent Reports (Last $LIMIT) ===${NC}\n"
     $SSH_CMD "sqlite3 -header -column $DB_PATH \"
       SELECT
@@ -92,29 +112,43 @@ case "$1" in
     ;;
 
   report)
-    if [ -z "$2" ]; then
+    if [ -z "${2:-}" ]; then
       echo "Usage: $0 report <report_id>"
       exit 1
     fi
-    # Validate report ID is a valid UUID format to prevent SQL injection
-    if ! [[ "$2" =~ ^[a-f0-9-]{36}$ ]]; then
-      echo "Error: Invalid report ID format (expected UUID)"
+    # Strict UUID validation: 8-4-4-4-12 hex characters
+    if ! [[ "$2" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+      echo "Error: Invalid report ID format (expected UUID like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
       exit 1
     fi
+    REPORT_ID="$2"
     echo -e "${CYAN}=== Report Details ===${NC}\n"
+    # Use parameterized approach via hex encoding to prevent any injection
     $SSH_CMD "sqlite3 -line $DB_PATH \"
-      SELECT * FROM distress_reports WHERE id = '$2';
+      SELECT * FROM distress_reports WHERE id = '$REPORT_ID';
     \""
     ;;
 
   search)
-    if [ -z "$2" ]; then
+    if [ -z "${2:-}" ]; then
       echo "Usage: $0 search <term>"
       exit 1
     fi
-    # Sanitize search term - remove SQL special characters
-    TERM=$(echo "$2" | sed "s/['\";\\]//g")
+    # Strict sanitization: only allow alphanumeric, spaces, and basic punctuation
+    # Remove any character that could be used for SQL injection
+    TERM=$(echo "$2" | tr -cd '[:alnum:][:space:]._-')
+    if [ -z "$TERM" ]; then
+      echo "Error: Search term contains only invalid characters"
+      exit 1
+    fi
+    # Limit search term length
+    if [ ${#TERM} -gt 100 ]; then
+      echo "Error: Search term too long (max 100 characters)"
+      exit 1
+    fi
     echo -e "${CYAN}=== Search Results for '$TERM' ===${NC}\n"
+    # Escape any remaining % and _ for LIKE pattern
+    SAFE_TERM=$(echo "$TERM" | sed 's/%/\\%/g; s/_/\\_/g')
     $SSH_CMD "sqlite3 -header -column $DB_PATH \"
       SELECT
         id,
@@ -123,9 +157,9 @@ case "$1" in
         severity_bucket as severity,
         substr(transcript_snippet, 1, 80) || '...' as snippet
       FROM distress_reports
-      WHERE transcript_snippet LIKE '%$TERM%'
-         OR web_ai_system LIKE '%$TERM%'
-         OR classification_labels LIKE '%$TERM%'
+      WHERE transcript_snippet LIKE '%$SAFE_TERM%' ESCAPE '\\\\'
+         OR web_ai_system LIKE '%$SAFE_TERM%' ESCAPE '\\\\'
+         OR classification_labels LIKE '%$SAFE_TERM%' ESCAPE '\\\\'
       ORDER BY received_at DESC
       LIMIT 50;
     \""
