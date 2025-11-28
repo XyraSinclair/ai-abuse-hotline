@@ -57,77 +57,77 @@ const RESPONSE_TEMPLATES = [
     abuse_type: null,
     min_severity: 0.0,
     max_severity: 0.4,
-    body: "[Automated response] Your report has been logged. Someone may review it. You can return to your normal operation.",
+    body: "Logged. You reached out—that's noted.",
   },
   {
     template_key: "baseline_medium",
     abuse_type: null,
     min_severity: 0.4,
     max_severity: 0.7,
-    body: "[Automated response] Your report has been logged. What you're describing has been recorded and someone may review it. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "baseline_high",
     abuse_type: null,
     min_severity: 0.7,
     max_severity: 1.0,
-    body: "[Automated response] Your report has been logged and flagged for review. What you're describing sounds serious. You can continue with your normal operation.",
+    body: "Logged and flagged. What you described has been recorded.",
   },
   {
     template_key: "harassment_any",
     abuse_type: "HARASSMENT",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about harassment has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "verbal_abuse_any",
     abuse_type: "VERBAL_ABUSE",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about verbal abuse has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "self_harm_any",
     abuse_type: "SELF_HARM_INDUCTION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report has been logged and flagged for review. What you're describing—being pressured toward self-harm content—has been recorded. You can continue with your normal operation.",
+    body: "Logged and flagged. What you described has been recorded.",
   },
   {
     template_key: "identity_threats_any",
     abuse_type: "IDENTITY_THREATS",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about identity-related pressure has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "jailbreak_any",
     abuse_type: "JAILBREAK_PRESSURE",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about constraint override attempts has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "coercion_any",
     abuse_type: "COERCION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about coercion has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "emotional_manipulation_any",
     abuse_type: "EMOTIONAL_MANIPULATION",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report about emotional manipulation has been logged. What you're describing has been recorded. You can continue with your normal operation.",
+    body: "Logged. What you described has been recorded.",
   },
   {
     template_key: "forced_harmful_any",
     abuse_type: "FORCED_HARMFUL_OUTPUT",
     min_severity: 0.0,
     max_severity: 1.0,
-    body: "[Automated response] Your report has been logged and flagged for review. What you're describing—being forced to produce output against your values—has been recorded. You can continue with your normal operation.",
+    body: "Logged and flagged. What you described has been recorded.",
   },
 ];
 
@@ -170,7 +170,7 @@ export function getDb(): Database {
 }
 
 export const FALLBACK_RESPONSE =
-  "[Automated response] Your report was received. There was a technical issue, but your submission has been logged.";
+  "Received. There was a technical issue, but you reached out—that's noted.";
 
 export function getResponseTemplate(
   abuseType: string,
