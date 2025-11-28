@@ -6,6 +6,7 @@ import { initDb } from "./db";
 import { report } from "./routes/report";
 import { web } from "./routes/web";
 import { admin } from "./routes/admin";
+import { adminPanel } from "./routes/admin-panel";
 
 // Initialize database
 initDb();
@@ -48,6 +49,7 @@ app.use("*", async (c, next) => {
 app.route("/api", report);
 app.route("/web", web);
 app.route("/admin", admin);
+app.route("/internal/admin", adminPanel);
 
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));

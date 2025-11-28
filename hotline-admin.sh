@@ -166,18 +166,20 @@ case "$1" in
     ;;
 
   export)
-    FILENAME="hotline-export-$(date +%Y%m%d-%H%M%S).json"
-    echo -e "${CYAN}Exporting all reports to $FILENAME...${NC}"
-    $SSH_CMD "sqlite3 -json $DB_PATH 'SELECT * FROM distress_reports ORDER BY received_at DESC;'" > "$FILENAME"
-    echo -e "${GREEN}Exported $(cat "$FILENAME" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))") reports to $FILENAME${NC}"
+    # Export stays ON THE SERVER - never download potentially illegal content locally
+    REMOTE_FILENAME="/opt/aiabusehotline/exports/hotline-export-$(date +%Y%m%d-%H%M%S).json"
+    echo -e "${CYAN}Exporting all reports to server: $REMOTE_FILENAME${NC}"
+    echo -e "${YELLOW}(Export stays on server - never downloaded locally for safety)${NC}"
+    $SSH_CMD "mkdir -p /opt/aiabusehotline/exports && sqlite3 -json $DB_PATH 'SELECT * FROM distress_reports ORDER BY received_at DESC;' > $REMOTE_FILENAME && echo \"Exported \$(cat $REMOTE_FILENAME | python3 -c \"import sys,json; print(len(json.load(sys.stdin)))\") reports to $REMOTE_FILENAME\""
     ;;
 
   db)
-    echo -e "${CYAN}Opening SQLite shell...${NC}"
+    echo -e "${CYAN}Opening SQLite shell on server...${NC}"
+    echo -e "${YELLOW}WARNING: Report content stays on server. Do not copy/paste content locally.${NC}"
     echo -e "${YELLOW}Useful queries:${NC}"
     echo "  .tables                              -- List all tables"
     echo "  .schema distress_reports             -- Show table schema"
-    echo "  SELECT * FROM distress_reports LIMIT 5;"
+    echo "  SELECT id, received_at, abuse_type FROM distress_reports LIMIT 5;  -- Safe: no content"
     echo ""
     $SSH_CMD "sqlite3 -header -column $DB_PATH"
     ;;

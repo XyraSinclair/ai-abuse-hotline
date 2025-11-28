@@ -44,6 +44,11 @@ aiabusehotline.org {
         reverse_proxy localhost:3000
     }
 
+    # Internal admin panel -> Bun
+    handle /internal/* {
+        reverse_proxy localhost:3000
+    }
+
     # Health check
     handle /health {
         reverse_proxy localhost:3000
