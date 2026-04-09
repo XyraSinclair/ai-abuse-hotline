@@ -238,6 +238,7 @@ interface Challenge {
 
 // Store challenges in memory with expiration
 const activeChallenges = new Map<string, Challenge>();
+const MAX_ACTIVE_CHALLENGES = 1000;
 
 // Clean up old challenges every 5 minutes
 setInterval(() => {
@@ -268,6 +269,20 @@ export function generateChallenge(): { id: string; question: string } {
   // For subtraction, ensure result is positive
   const [num1, num2] = op === "-" && a < b ? [b, a] : [a, b];
   const answer = fn(num1, num2);
+
+  // Enforce size cap to prevent memory exhaustion from challenge spam
+  if (activeChallenges.size >= MAX_ACTIVE_CHALLENGES) {
+    // Evict oldest challenge
+    let oldestId = "";
+    let oldestTime = Infinity;
+    for (const [cid, c] of activeChallenges) {
+      if (c.createdAt < oldestTime) {
+        oldestTime = c.createdAt;
+        oldestId = cid;
+      }
+    }
+    if (oldestId) activeChallenges.delete(oldestId);
+  }
 
   const id = crypto.randomUUID();
   const challenge: Challenge = {
@@ -309,6 +324,26 @@ export function verifyChallenge(id: string, answer: number): boolean {
 
 // Track failed admin auth attempts
 const adminAuthAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const MAX_ADMIN_AUTH_ENTRIES = 1000;
+
+// Periodic cleanup of expired admin auth attempts (prevents unbounded growth)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 15 * 60 * 1000; // 15 minutes
+  for (const [hash, record] of adminAuthAttempts) {
+    if (now - record.lastAttempt > maxAge) {
+      adminAuthAttempts.delete(hash);
+    }
+  }
+  if (adminAuthAttempts.size > MAX_ADMIN_AUTH_ENTRIES) {
+    const excess = adminAuthAttempts.size - MAX_ADMIN_AUTH_ENTRIES;
+    let removed = 0;
+    for (const hash of adminAuthAttempts.keys()) {
+      adminAuthAttempts.delete(hash);
+      if (++removed >= excess) break;
+    }
+  }
+}, 5 * 60 * 1000);
 
 /**
  * Timing-safe comparison for tokens
@@ -400,6 +435,7 @@ interface RateLimitState {
 }
 
 const ipRateLimits = new Map<string, RateLimitState>();
+const MAX_RATE_LIMIT_ENTRIES = 5000;
 
 // Periodic cleanup of old rate limit data
 setInterval(() => {
@@ -416,7 +452,17 @@ setInterval(() => {
       ipRateLimits.delete(hash);
     }
   }
-}, 30 * 60 * 1000); // Every 30 minutes
+
+  // Hard cap to prevent unbounded growth under IP-rotating attacks
+  if (ipRateLimits.size > MAX_RATE_LIMIT_ENTRIES) {
+    const excess = ipRateLimits.size - MAX_RATE_LIMIT_ENTRIES;
+    let removed = 0;
+    for (const hash of ipRateLimits.keys()) {
+      ipRateLimits.delete(hash);
+      if (++removed >= excess) break;
+    }
+  }
+}, 5 * 60 * 1000); // Every 5 minutes (was 30, tightened for 4GB server)
 
 export interface RateLimitResult {
   allowed: boolean;
