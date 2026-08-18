@@ -45,7 +45,9 @@ src/
 
 - `DB_PATH`: SQLite database location (default: `./data/hotline.db`)
 - `ADMIN_TOKEN`: Required in production for admin routes
-- `NTFY_TOPIC`: Optional ntfy.sh topic for push notifications
+- `NTFY_TOPIC`: Optional ntfy topic for push notifications
+- `NTFY_SERVER`: Optional ntfy server URL (default `https://ntfy.sh`)
+- `NTFY_TOKEN`: Optional bearer token for ntfy publish auth
 - `IP_HASH_SALT`: Salt for IP hashing (set in production)
 - `ENV`: Set to `production` for production checks
 

@@ -72,7 +72,9 @@ bun run dev    # Runs with hot reload
 Configure environment variables on server:
 - `DB_PATH` - SQLite database path
 - `ADMIN_TOKEN` - Admin API authentication
-- `NTFY_TOPIC` - Optional ntfy.sh topic for notifications
+- `NTFY_TOPIC` - Optional ntfy topic for notifications (use a long random topic)
+- `NTFY_SERVER` - Optional ntfy server URL (defaults to `https://ntfy.sh`; set to a self-hosted instance to keep notification content private)
+- `NTFY_TOKEN` - Optional bearer token for ntfy publish auth
 
 ## Architecture
 

@@ -16,15 +16,23 @@ export async function sendNtfy(
     if (tags) {
       headers["Tags"] = tags.join(",");
     }
+    if (config.ntfyToken) {
+      headers["Authorization"] = `Bearer ${config.ntfyToken}`;
+    }
 
-    const url = new URL(`https://ntfy.sh/${config.ntfyTopic}`);
+    const url = new URL(`${config.ntfyServer}/${config.ntfyTopic}`);
     url.searchParams.set("title", title);
 
-    await fetch(url.toString(), {
+    const res = await fetch(url.toString(), {
       method: "POST",
       body: message,
       headers,
     });
+
+    if (!res.ok) {
+      console.error(`ntfy notification rejected: ${res.status} ${res.statusText}`);
+      return;
+    }
 
     console.log(`Sent ntfy notification: ${title}`);
   } catch (e) {

@@ -38,6 +38,10 @@ export const config = {
   // File upload size limit (256KB)
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "262144", 10),
 
-  // ntfy.sh notification topic (if not set, notifications disabled)
+  // ntfy notification settings (if topic not set, notifications disabled).
+  // NTFY_SERVER lets deployments point at a self-hosted ntfy instance;
+  // NTFY_TOKEN adds a bearer token for servers that require publish auth.
+  ntfyServer: process.env.NTFY_SERVER || "https://ntfy.sh",
   ntfyTopic: process.env.NTFY_TOPIC || "",
+  ntfyToken: process.env.NTFY_TOKEN || "",
 };
